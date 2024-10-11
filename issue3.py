@@ -91,4 +91,4 @@ np.save("b2_issue3.npy", b2)
 """
 
 #クロスエントロピー誤差を記録
-np.save("entropy_sigmoid.npy", entropy)
+#np.save("entropy_sigmoid.npy", entropy)

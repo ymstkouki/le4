@@ -20,11 +20,10 @@ Y=mnist.download_and_parse_mnist_file("C:\\Users\\yamashita kouki\\TensorFlow-MN
 X=X/255
 
 #ミニバッチの取り出し
-np.random.seed(1)
-X_batch=np.random.choice(range(len(X)),batch_size,replace=False)
+np.random.seed(0)
+X_batch=np.random.choice(len(X),batch_size,replace=False)
 
 #重みの初期値を設定
-np.random.seed(0)
 W1=np.random.normal(0,np.sqrt(1/pic_size),(ml_size,pic_size))
 b1=np.random.normal(0,np.sqrt(1/pic_size),(ml_size,batch_size))
 W2=np.random.normal(0,np.sqrt(1/ml_size),(class_num,ml_size))
