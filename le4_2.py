@@ -84,9 +84,9 @@ def main():
     pdir_test = 'C:\\Users\\yamashita kouki\\TensorFlow-MNIST\\mnist\\data\\t10k-images-idx3-ubyte.gz'
     ldir_test = 'C:\\Users\\yamashita kouki\\TensorFlow-MNIST\\mnist\\data\\t10k-labels-idx1-ubyte.gz'
 
-    cn = Customized_Network(10, 50, 'r')
+    cn = Customized_Network(10, 50, 's')
     cn.read_mnist(pdir_train, ldir_train)
-    cn.param_init(epoc_size=10)
+    cn.param_init(epoc_size=100)
     cn.process()    
     cn.check_acc(pdir_test, ldir_test)
 
