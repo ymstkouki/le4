@@ -128,6 +128,7 @@ class Network:
             for _ in range(self.pic_num // self.batch_size):
                 X_batch_ = np.random.choice(self.id_list, self.batch_size, replace=False)
                 X_batch = np.array(itemgetter(X_batch_)(self.X)).T
+                #X_batch = np.array(X_batch_[self.X]).T
 
                 #使用した画像番号を消去
                 id_set = set(self.id_list) - set(X_batch_)

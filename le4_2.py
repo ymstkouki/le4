@@ -58,7 +58,7 @@ def dropout_bp(x, en_y, ignores):
     return en_x
 
 
-class Customized_Network(Network):
+class CustomizedNetwork(Network):
     def __init__(self, class_num, ml_size, opt1):
         super().__init__(class_num, ml_size)
         self.opt1 = opt1
@@ -84,7 +84,7 @@ def main():
     pdir_test = 'C:\\Users\\yamashita kouki\\TensorFlow-MNIST\\mnist\\data\\t10k-images-idx3-ubyte.gz'
     ldir_test = 'C:\\Users\\yamashita kouki\\TensorFlow-MNIST\\mnist\\data\\t10k-labels-idx1-ubyte.gz'
 
-    cn = Customized_Network(10, 50, 's')
+    cn = CustomizedNetwork(10, 50, 's')
     cn.read_mnist(pdir_train, ldir_train)
     cn.param_init(epoc_size=100)
     cn.process()    
