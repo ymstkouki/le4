@@ -7,27 +7,31 @@ from tqdm import tqdm
 
 from le4_1 import Network
 
-#入力(畳み込み)→中間(全結合)→出力
+#入力(畳み込み→プーリング)→中間(全結合)→出力
 class ColorImageNetwork(Network):
     def __init__(self, class_num, filter_size, filter_ch):
         self.class_num = class_num
         self.filter_size = filter_size
         self.filter_ch = filter_ch
 
-    def param_init(self, eta=0.01, batch_size=100, epoc_size=30):
+    def param_init(self, eta=0.01, batch_size=100, epoc_size=100, pool=0):
         np.random.seed(1)
 
         #畳み込み
-        self.W1 = np.random.normal(0, np.sqrt(1/self.pic_sizex*self.pic_sizey), (self.filter_ch, 3*self.filter_size**2))
+        self.W1 = np.random.normal(0, np.sqrt(1/3*self.filter_size**2), (self.filter_ch, 3*self.filter_size**2))
         self.b1 = np.random.normal(0, np.sqrt(1/self.pic_sizex*self.pic_sizey), (self.filter_ch, 1))
         
         #全結合
-        self.W2 = np.random.normal(0, np.sqrt(1/self.filter_ch*self.pic_sizex*self.pic_sizey), (self.class_num, self.filter_ch*self.pic_sizex*self.pic_sizey))
+        if pool == 0:
+            self.W2 = np.random.normal(0, np.sqrt(1/self.filter_ch*self.pic_sizex*self.pic_sizey), (self.class_num, self.filter_ch*self.pic_sizex*self.pic_sizey))
+        else:
+            self.W2 = np.random.normal(0, np.sqrt(1/self.filter_ch*self.pic_sizex*self.pic_sizey), (self.class_num, self.filter_ch*(self.pic_sizex//pool)*(self.pic_sizey//pool)))
         self.b2 = np.random.normal(0, np.sqrt(1/self.filter_ch*self.pic_sizex*self.pic_sizey), (self.class_num, 1))
-
+        
         self.eta = eta
         self.batch_size = batch_size
         self.epoc_size = epoc_size
+        self.pool = pool
         self.ce = np.array([])
 
     #カラー画像の読み込み
@@ -64,25 +68,36 @@ class ColorImageNetwork(Network):
     
     #パディング済みの画像から行列Xに変換
     #画像数はそのまま
+    #ここが見直し必要かも
     def padded2matrix(self):
-        X = np.empty((self.padded_pic.shape[0], 3*self.filter_size*self.filter_size, self.pic_sizex*self.pic_sizey))
+        X = np.empty((self.padded_pic.shape[0], 3, self.filter_size, self.filter_size, self.pic_sizex, self.pic_sizey))
         for i in (range(self.filter_size)):
             for j in range(self.filter_size):
-                X[:, i*3+j, :] = self.padded_pic[:, 0, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
-                X[:, i*3+j+self.filter_size**2, :] = self.padded_pic[:, 1, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
-                X[:, i*3+j+2*self.filter_size**2, :] = self.padded_pic[:, 2, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
-        batch_X = X.transpose(1, 0, 2)
-        self.batch_X = batch_X.reshape(batch_X.shape[0], batch_X.shape[1]*batch_X.shape[2])
+                X[:, :, i, j, :, :] = self.padded_pic[:, :, i:i+self.pic_sizey, j:j+self.pic_sizex]
+                # X[:, i*self.filter_size+j, :] = self.padded_pic[:, 0, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
+                # X[:, i*self.filter_size+j+self.filter_size**2, :] = self.padded_pic[:, 1, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
+                # X[:, i*self.filter_size+j+2*self.filter_size**2, :] = self.padded_pic[:, 2, i:i+self.pic_sizey, j:j+self.pic_sizex].reshape(-1, self.pic_sizex*self.pic_sizey)
+        # batch_X = X.transpose(1, 0, 2)
+        # print(27*100*1024 - np.count_nonzero(batch_X))
+        # self.batch_X = batch_X.reshape(batch_X.shape[0], batch_X.shape[1]*batch_X.shape[2])
+        self.batch_X = X.transpose(0, 4, 5, 1, 2, 3).reshape(X.shape[0]*self.pic_sizex*self.pic_sizey, -1).T
 
     #処理済みのW，X，Bを使って畳み込みの計算
     #最終的には(-1, batch_size)の形で与える
     def convolve(self):
         conv_out = np.dot(self.W1, self.batch_X) + self.b1
         conv_out = conv_out.T
-        conv_out = conv_out.reshape(self.batch_size, -1, self.filter_ch)
-        conv_out = conv_out.transpose(0, 2, 1)
-        conv_out = conv_out.reshape(self.batch_size, -1)
-        self.conv_out = conv_out.T
+        
+        #プーリング層を使う場合
+        if self.pool != 0:
+            conv_out = conv_out.reshape(self.batch_size, self.pic_sizex, self.pic_sizey, self.filter_ch)
+            self.conv_out = conv_out.transpose(0, 3, 1, 2)
+        #プーリング層を使わない場合
+        else:
+            conv_out = conv_out.reshape(self.batch_size, -1, self.filter_ch)
+            conv_out = conv_out.transpose(0, 2, 1)
+            conv_out = conv_out.reshape(self.batch_size, -1)
+            self.conv_out = conv_out.T
     
     #逆伝播
     def convolve_bp(self):
@@ -107,13 +122,56 @@ class ColorImageNetwork(Network):
         tmp = np.multiply(self.act1_out, 1-self.act1_out)
         self.en_conv_out = np.multiply(self.en_act1_out, tmp)
     
+    #プーリング層
+    def pooling(self):
+        tmp = self.act1_out
+        d = self.pool
+        pooling = np.empty((tmp.shape[0], tmp.shape[1], tmp.shape[2]//d, tmp.shape[3]//d))
+        ind = np.empty((tmp.shape[0], tmp.shape[1], tmp.shape[2]//d, tmp.shape[3]//d, 2), dtype=np.int8)
+        for i in range(pooling.shape[0]):
+            for j in range(pooling.shape[1]):
+                for k in range(pooling.shape[2]):
+                    for l in range(pooling.shape[3]):
+                        window = tmp[i, j, d*k:d*(k+1), d*l:d*(l+1)]
+                        max_pos = np.unravel_index(np.argmax(window), window.shape)
+                        pooling[i, j, k, l] = window[max_pos]
+                        ind[i, j, k, l] = (k+max_pos[0], l+max_pos[1])
+        self.pooling_out = pooling.reshape(pooling.shape[0], -1).T
+        self.pooling_ind = ind
+    
+    #逆伝播
+    def pooling_bp(self):
+        d = self.pool
+        en_act1_out = np.zeros_like(self.act1_out)
+        for i in range(en_act1_out.shape[0]):
+            for j in range(en_act1_out.shape[1]):
+                for k in range(en_act1_out.shape[2]//d):
+                    for l in range(en_act1_out.shape[3]//d):
+                        max_pos = self.pooling_ind[i, j, k, l]
+                        en_act1_out[i, j, max_pos[0], max_pos[1]] = self.en_pooling_out[j*(en_act1_out.shape[2]//d)*(en_act1_out.shape[3]//d)+k*(en_act1_out.shape[3]//d)+l, i]
+        self.en_act1_out = en_act1_out
+    
+    #プーリング層からの出力を全結合
+    def fc2_pool(self):
+        self.fc2_out = np.dot(self.W2, self.pooling_out) + self.b2
+
+    #逆伝播
+    def fc2_pool_bp(self):
+        en_x = np.dot(self.W2.T, self.en_fc2_out)
+        en_W2 = np.dot(self.en_fc2_out, self.pooling_out.T)
+        en_b2 = np.sum(self.en_fc2_out, axis=1)
+        
+        self.en_pooling_out = en_x
+        self.W2 -= self.eta * en_W2
+        self.b2 -= self.eta * en_b2.reshape(en_b2.shape[0], -1)
+    
     def act2_bp(self):
         #ykは正解ラベルのone-hot vector
         self.en_fc2_out = np.subtract(self.act2_out, self.yk) / self.batch_size
     
     def cross_entropy(self):
         #devide by zero in logを回避
-        epsilon = 1e-8
+        epsilon = 1e-15
         e = 0
 
         for i in range(self.batch_size):
@@ -130,11 +188,19 @@ class ColorImageNetwork(Network):
     def process_(self):
         self.convolve()
         self.act1()
-        self.fc2()
+        if self.pool != 0:
+            self.pooling()
+            self.fc2_pool()
+        else:
+            self.fc2()
         self.act2()
         self.cross_entropy()
         self.act2_bp()
-        self.fc2_bp()
+        if self.pool != 0:
+            self.fc2_pool_bp()
+            self.pooling_bp()
+        else:
+            self.fc2_bp()
         self.act1_bp()
         self.convolve_bp()
 
